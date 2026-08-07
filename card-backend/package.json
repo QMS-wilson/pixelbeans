@@ -1,0 +1,8 @@
+{
+  "name": "pixel-beads-card-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js"
+  }
+}

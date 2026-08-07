@@ -1,0 +1,15 @@
+{
+  "name": "pixel-beads-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "adobe:remove-bg": "node tools/adobe-remove-bg.mjs",
+    "test:syntax": "node --check server.js && node --check script.js && node --check card-backend/server.js && node --check card-backend/card-service.js && node --check palettes.js",
+    "test:smoke": "node tools/playwright_test.js",
+    "test": "npm run test:syntax && npm run test:smoke"
+  },
+  "devDependencies": {
+    "playwright": "^1.54.0"
+  }
+}

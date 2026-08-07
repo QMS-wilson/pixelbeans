@@ -1,0 +1,8 @@
+.dev.vars
+node_modules/
+*.log
+卡密/cards.json
+card-backend/卡密/cards.json
+card-backend/卡密/
+pixelme_test_outputs/
+.DS_Store

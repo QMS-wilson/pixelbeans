@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>像素工坊 - 拼豆图纸生成器</title>
+    <meta
+      name="description"
+      content="上传图片并转换为可制作的拼豆图纸，支持网格数量、颜色合并、色板映射、用量统计，以及 PNG 和 CSV 导出。"
+    />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="像素工坊首页">
+        <span class="brand-mark" aria-hidden="true">PX</span>
+        <span>
+          <strong>像素工坊</strong>
+          <small>Bead Pattern Lab</small>
+        </span>
+      </a>
+      <nav class="desktop-nav" aria-label="主导航">
+        <a href="#tool">生成工具</a>
+        <a href="#stats">色号统计</a>
+        <a href="#workflow">使用流程</a>
+        <a href="#membership">卡密兑换</a>
+      </nav>
+      <a class="header-cta" href="#tool">开始制图</a>
+    </header>
+
+    <main id="top">
+      <section class="hero section-shell">
+        <div class="hero-copy">
+          <h1>把图片转换成可制作的拼豆图纸</h1>
+          <p>
+            上传图片后，浏览器会在本地完成像素化、颜色映射、用量统计和图纸导出。
+            不依赖服务器处理，更适合快速打样、客户确认和制作前准备。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#tool">打开生成器</a>
+            <a class="button ghost" href="#workflow">查看流程</a>
+          </div>
+          <dl class="hero-stats" aria-label="产品能力">
+            <div>
+              <dt>本地处理</dt>
+              <dd>图片不上行到服务器</dd>
+            </div>
+            <div>
+              <dt>10-220</dt>
+              <dd>横向格数可调</dd>
+            </div>
+            <div>
+              <dt>PNG / CSV</dt>
+              <dd>图纸与清单导出</dd>
+            </div>
+          </dl>
+        </div>
+
+        <section class="tool-card" id="tool" aria-label="拼豆图纸生成工具">
+          <div class="tool-topbar">
+            <span></span><span></span><span></span>
+            <strong>Pattern Lab</strong>
+            <div class="tool-topbar-actions" id="toolTopbarActions">
+              <label class="topbar-upload" for="fileInput">上传图片</label>
+              <button class="topbar-blank" id="topbarBlankBoard" type="button">空白画布</button>
+              <button
+                class="topbar-preprocess"
+                id="topbarPreprocess"
+                type="button"
+                aria-expanded="false"
+                aria-controls="preprocessPanel"
+              >
+                AI优化
+              </button>
+            </div>
+            <em id="statusText" aria-live="polite">等待图片</em>
+          </div>
+
+          <div class="tool-grid" id="toolGrid">
+            <section class="upload-panel" id="dropZone">
+              <input id="fileInput" type="file" accept="image/*" />
+              <label for="fileInput">
+                <span class="upload-icon">+</span>
+                <strong id="uploadTitle">上传图片开始生成</strong>
+                <small id="uploadHint">支持 JPG / PNG / WebP，可点击选择或拖拽图片</small>
+              </label>
+              <button class="blank-board" id="blankBoard" type="button">创建空白图纸</button>
+              <button class="blank-board" id="demoPattern" type="button">试试示例图纸</button>
+            </section>
+
+            <section class="canvas-panel">
+              <div class="canvas-frame" id="canvasFrame">
+                <canvas id="previewCanvas" width="720" height="720" aria-label="拼豆图纸预览"></canvas>
+              </div>
+              <section class="compare-panel" id="comparePanel" hidden aria-label="预处理前后对比">
+                <div class="compare-head">
+                  <strong>预处理对比</strong>
+                  <span id="compareSummary">上传图片后查看原图与预处理结果差异</span>
+                </div>
+                <div class="compare-grid">
+                  <article class="compare-card">
+                    <span>原图</span>
+                    <div class="compare-frame">
+                      <canvas id="sourcePreviewCanvas" width="280" height="280" aria-label="原图预览"></canvas>
+                    </div>
+                  </article>
+                  <article class="compare-card">
+                    <span id="processedPreviewLabel">预处理结果</span>
+                    <div class="compare-frame">
+                      <canvas id="processedPreviewCanvas" width="280" height="280" aria-label="预处理结果预览"></canvas>
+                    </div>
+                  </article>
+                </div>
+              </section>
+              <p id="canvasHint">上传后会生成带网格线的拼豆预览图，可用于确认布局和配色。</p>
+            </section>
+
+            <aside class="control-panel" aria-label="图纸控制面板">
+              <label>
+                横向格数 <output id="gridOutput">64</output>
+                <input id="gridSize" type="range" min="10" max="220" value="64" />
+              </label>
+              <label>
+                颜色合并 <output id="mergeOutput">24</output>
+                <input id="mergeLevel" type="range" min="0" max="60" value="24" />
+              </label>
+              <label>
+                显示网格线
+                <select id="gridLine">
+                  <option value="on">显示</option>
+                  <option value="off">隐藏</option>
+                </select>
+              </label>
+              <label>
+                拼豆色板
+                <select id="paletteSelect"></select>
+                <div class="palette-preview" id="palettePreview" aria-hidden="true"></div>
+              </label>
+
+              <section class="editor-panel" aria-label="手绘编辑器">
+                <div class="editor-head">
+                  <strong>手绘编辑</strong>
+                  <span id="editorModeText">画笔模式</span>
+                </div>
+                <div class="editor-toolbar">
+                  <button id="brushTool" class="editor-tool active" type="button">画笔</button>
+                  <button id="eraserTool" class="editor-tool secondary" type="button">橡皮</button>
+<button id="undoEdit" class="editor-tool secondary" type="button" disabled>撤销</button>
+<button id="redoEdit" class="editor-tool secondary" type="button" disabled>重做</button>
+<button id="clearBoard" class="editor-tool secondary" type="button" disabled>清空</button>
+<button id="clearSave" class="editor-tool secondary" type="button" disabled>清除存档</button>
+<button id="projectLibrary" class="editor-tool secondary" type="button" disabled>项目库</button>
+                </div>
+                <div class="editor-active">
+                  <i id="activeColorChip" aria-hidden="true"></i>
+                  <span id="activeColorText">选择一个颜色开始绘制</span>
+                </div>
+                <div class="palette-filters" id="paletteFilters" aria-label="按色系筛选"></div>
+                <div class="editor-palette" id="editorPalette" aria-label="手绘颜色选择"></div>
+              </section>
+
+              <p class="control-note" id="controlNote">上传图片后会自动生成色号，你也能继续手动微调。</p>
+
+              <div class="actions">
+                <button id="downloadCodePng" type="button" disabled>下载带 Code 图纸</button>
+                <button id="downloadCleanPng" class="secondary" type="button" disabled>下载无 Code 图纸</button>
+                <button id="downloadCsv" class="secondary" type="button" disabled>下载 CSV 清单</button>
+                <button id="printPattern" class="secondary" type="button" disabled>打印图纸</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+
+      <section class="features section-shell">
+        <article>
+          <span>01</span>
+          <h2>忠实转图</h2>
+          <p>提取图片主要色彩并映射到指定色板，适合做拼豆前的效果确认与快速预览。</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h2>参数实时生效</h2>
+          <p>调整网格、颜色合并和网格显示后，预览结果会立即刷新，方便比较不同方案。</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h2>用量统计</h2>
+          <p>自动统计每种色号的数量，方便备料、报价以及后续制作安排。</p>
+        </article>
+        <article>
+          <span>04</span>
+          <h2>便捷导出</h2>
+          <p>支持导出 PNG 图纸与 CSV 清单，便于内部流转、客户确认和后期存档。</p>
+        </article>
+      </section>
+
+      <section class="stats-section section-shell" id="stats">
+        <div>
+          <h2>色号统计</h2>
+          <p>根据图纸结果展示当前图稿使用的所有色号、十六进制色值以及每种色号对应的颗粒数量。</p>
+        </div>
+        <div class="stats-card">
+          <div class="stats-head">
+            <strong>颜色清单</strong>
+            <span id="totalBeads">0 颗</span>
+          </div>
+          <p class="size-hint" id="sizeHint"></p>
+          <button id="copyPaletteList" class="copy-btn" type="button" disabled>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <rect x="6.5" y="6.5" width="9" height="9" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <path d="M13.5 6.5v-1a2 2 0 0 0-2-2h-6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <span id="copyPaletteListText">复制色号清单</span>
+          </button>
+          <div class="palette-list" id="paletteList">
+            <p class="empty-state">还没有生成图纸，上传一张图片后即可查看。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="workflow section-shell" id="workflow">
+        <h2>三步生成一张拼豆图纸</h2>
+        <div class="steps">
+          <article>
+            <strong>1</strong>
+            <h3>上传图片</h3>
+            <p>选择本地图片后，系统会自动识别尺寸并展示当前处理结果。</p>
+          </article>
+          <article>
+            <strong>2</strong>
+            <h3>调整参数</h3>
+            <p>设置横向格数、颜色合并强度、色板方案以及编码显示方式。</p>
+          </article>
+          <article>
+            <strong>3</strong>
+            <h3>下载结果</h3>
+            <p>导出图纸与 CSV 清单，备好颜色与材料，再进入制作或客户确认环节。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="guide section-shell" id="guide">
+        <div>
+          <h2>拼豆品牌与尺寸指南</h2>
+          <p>不同品牌的豆子尺寸不同，色号体系也不一样。选择对应色板后，图纸上的色号即可直接对照购买。</p>
+        </div>
+        <div class="guide-table-wrap">
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>品牌</th>
+                <th>豆径</th>
+                <th>色号示例</th>
+                <th>特点</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Perler</td><td>5mm 标准</td><td>80-15179</td><td>美国主流品牌，色号覆盖广</td></tr>
+              <tr><td>Hama Midi</td><td>5mm</td><td>H01 / H05</td><td>丹麦老牌，色号规则最规范</td></tr>
+              <tr><td>Artkal S</td><td>5mm</td><td>S01 / S02</td><td>199 色，国产出口品牌，色域最全</td></tr>
+              <tr><td>Artkal C</td><td>2.6mm 迷你</td><td>C01</td><td>迷你豆，适合精细图纸</td></tr>
+              <tr><td>Artkal R</td><td>5mm</td><td>R01</td><td>5mm 独立色号体系</td></tr>
+              <tr><td>Nabbi</td><td>5mm</td><td>N01 / N19</td><td>瑞典品牌，30 色极简北欧风</td></tr>
+              <tr><td>Yant</td><td>5mm</td><td>Y002</td><td>莫兰迪低饱和色系，119 色</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="guide-note">提示：不同品牌豆子一般不建议混用；购买前请核对图纸上的色号与品牌规格。</p>
+      </section>
+
+      <section class="membership section-shell" id="membership">
+        <div>
+          <h2>卡密兑换</h2>
+          <p>当前版本支持在下载时弹出卡密兑换窗口，兑换成功后即可下载图纸与 CSV 清单。</p>
+        </div>
+        <div class="payment-placeholder">
+          <strong>下载前输入卡密</strong>
+          <span id="accessStatusBadge">点击下载时会弹出兑换窗口</span>
+          <span id="paymentUsageSummary">AI 剩余 0/3 次 · 下载剩余 0/3 次</span>
+          <p class="card-redeem-message">兑换成功后，本次浏览会自动解锁下载权限。</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <strong>像素工坊</strong>
+      <span>原型已聚焦核心能力，当前版本专注图纸生成与导出流程。</span>
+    </footer>
+
+    <div class="ai-overlay" id="aiOverlay" hidden>
+      <div class="ai-overlay-content" role="status" aria-live="polite">
+        <span class="ai-spinner" aria-hidden="true"></span>
+        <strong>图片正在 AI 优化中</strong>
+        <p>请稍候，系统正在根据已确认的提示词处理图片。</p>
+        <p class="ai-wait-text" id="aiWaitText"></p>
+        <button id="cancelAiButton" class="secondary" type="button">取消本次优化</button>
+      </div>
+    </div>
+
+    <div class="ai-overlay preprocess-overlay" id="preprocessOverlay" hidden>
+      <section class="preprocess-panel preprocess-modal" id="preprocessPanel" aria-label="预处理设置">
+        <div class="preprocess-head">
+          <strong>预处理增强</strong>
+          <small>AI 已负责主体风格处理，这里只保留 AI 优化开关与提示词设置。</small>
+        </div>
+        <label>
+          AI 优化
+          <select id="aiOptimize">
+            <option value="off">关闭</option>
+            <option value="on">开启</option>
+          </select>
+        </label>
+        <label class="prompt-field">
+          AI 提示词
+          <select id="aiPromptPreset">
+            <option value="">快捷风格模板…</option>
+            <option value="将图片优化为适合拼豆图纸的形象：保留主体特征，白色干净背景，chibi 可爱画风，pixel art style, 16-bit, retro game aesthetic, sharp focus, high contrast, clean lines, detailed pixel art, masterpiece, best quality">Q版可爱（默认）</option>
+            <option value="将图片转化为复古像素游戏风格：16-bit pixel art, retro game aesthetic, crisp edges, limited palette, clean background, high contrast, masterpiece">复古像素游戏</option>
+            <option value="将图片处理为透明背景的贴纸形象：clean sticker style, white outline, vivid colors, no background, crisp edges, pixel art">透明背景贴纸</option>
+            <option value="将图片转换为水墨国风插画：ink wash painting, elegant, minimal color, soft edges, chinese style, pixel art">水墨国风</option>
+            <option value="将图片优化为卡通扁平风格：flat cartoon illustration, bold colors, simple shapes, clean background, friendly, pixel art">扁平卡通</option>
+          </select>
+          <textarea id="aiPrompt" rows="4">将图片优化为适合拼豆图纸的形象：保留主体特征，白色干净背景，chibi 可爱画风，pixel art style, 16-bit, retro game aesthetic, sharp focus, high contrast, clean lines, detailed pixel art, masterpiece, best quality</textarea>
+          <button id="confirmAiPrompt" class="secondary" type="button">确认提示词</button>
+        </label>
+      </section>
+    </div>
+
+    <div class="ai-overlay card-modal-overlay" id="cardModalOverlay" hidden>
+      <section class="preprocess-panel preprocess-modal card-modal" id="cardModal" aria-label="卡密兑换窗口">
+        <div class="preprocess-head">
+          <strong>解锁下载图纸结果</strong>
+          <small>输入有效卡密后即可下载带 Code 图纸、无 Code 图纸和 CSV 清单。</small>
+        </div>
+        <span id="accessStatusBadgeModal" class="card-modal-badge">当前未解锁下载权限</span>
+        <div class="card-modal-benefits">
+          <span>✓ 带 Code 图纸下载</span>
+          <span>✓ 无 Code 图纸下载</span>
+          <span>✓ CSV 清单下载</span>
+        </div>
+        <label class="card-redeem-field">
+          输入卡密后立即解锁
+          <input id="cardCodeInput" type="text" placeholder="例如 PB-ABCD-EFGH-JKLM" autocomplete="off" />
+        </label>
+        <div class="card-redeem-actions">
+          <button id="redeemCardButton" type="button">立即解锁下载</button>
+          <button id="logoutAccessButton" class="secondary" type="button" hidden>退出当前授权</button>
+          <button id="closeCardModalButton" class="secondary" type="button">稍后再说</button>
+        </div>
+        <p id="cardRedeemMessage" class="card-redeem-message">兑换成功后，本次浏览会自动解锁下载权限。</p>
+      </section>
+    </div>
+
+    <div class="ai-overlay card-modal-overlay" id="projectOverlay" hidden>
+      <section class="preprocess-panel preprocess-modal project-modal" id="projectPanel" aria-label="项目库">
+        <div class="preprocess-head">
+          <strong>项目库</strong>
+          <small>把当前图纸保存为项目，随时载入继续编辑。</small>
+          <button id="closeProjectButton" class="secondary" type="button">关闭</button>
+        </div>
+        <div class="project-form">
+          <input id="projectNameInput" type="text" placeholder="项目名称，例如：小猫挂件" />
+          <button id="saveProjectButton" type="button">保存当前为项目</button>
+        </div>
+        <div class="project-list" id="projectList">
+          <p class="empty-state">暂无保存的项目。</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="ai-overlay card-modal-overlay" id="downloadConfirmOverlay" hidden>
+      <section class="preprocess-panel preprocess-modal card-modal" aria-label="导出确认">
+        <div class="preprocess-head">
+          <strong>确认导出</strong>
+          <small>本次导出将消耗 1 次下载额度。</small>
+        </div>
+        <span id="downloadConfirmRemaining" class="card-modal-badge"></span>
+        <div class="card-redeem-actions">
+          <button id="confirmDownloadButton" type="button">继续导出</button>
+          <button id="cancelDownloadButton" class="secondary" type="button">取消</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="ai-overlay card-modal-overlay" id="csvPreviewOverlay" hidden>
+      <section class="preprocess-panel preprocess-modal csv-preview-modal" aria-label="CSV 清单预览">
+        <div class="preprocess-head">
+          <strong>CSV 清单预览</strong>
+          <small>确认内容后再下载（将消耗 1 次下载额度），也可直接复制文本。</small>
+          <button id="closeCsvPreviewButton" class="secondary" type="button">关闭</button>
+        </div>
+        <pre class="csv-preview-body" id="csvPreviewBody"></pre>
+        <div class="card-redeem-actions">
+          <button id="confirmCsvDownloadButton" type="button">下载 CSV</button>
+          <button id="copyCsvButton" class="secondary" type="button">复制文本</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="ai-overlay error-overlay" id="errorOverlay" hidden>
+      <div class="ai-overlay-content error-overlay-content" role="alert" aria-live="assertive">
+        <strong>提示信息</strong>
+        <p id="errorOverlayMessage">发生了错误，请重试。</p>
+        <button id="closeErrorOverlayButton" class="secondary" type="button">我知道了</button>
+      </div>
+    </div>
+
+    <script src="./palettes.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
