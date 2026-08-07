@@ -1,7 +1,7 @@
 const DEFAULT_CANVAS_SIZE = 720;
 const MAX_IMPORT_FILE_SIZE = 12 * 1024 * 1024;
-const BACKEND_PORT = 9090;
-const APP_API_BASE = `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`;
+// 同源 /api：本地开发由 server.js 代理到 9090，Cloudflare Pages 由 functions/api 代理到后端。
+const APP_API_BASE = "";
 const AI_OPTIMIZE_ENDPOINT = `${APP_API_BASE}/api/ai-optimize`;
 const DEFAULT_AI_PROMPT =
   "将图片优化为适合拼豆图纸的形象：保留主体特征，白色干净背景，chibi 可爱画风，pixel art style, 16-bit, retro game aesthetic, sharp focus, high contrast, clean lines, detailed pixel art, masterpiece, best quality";
