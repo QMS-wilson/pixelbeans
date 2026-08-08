@@ -4,5 +4,6 @@ node_modules/
 卡密/cards.json
 card-backend/卡密/cards.json
 card-backend/卡密/
+dist/
 pixelme_test_outputs/
 .DS_Store
