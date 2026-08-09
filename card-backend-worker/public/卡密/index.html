@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>卡密管理台</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --line: rgba(15, 23, 42, 0.08);
+        --blue: #3157d5;
+        --violet: #6d4aff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: linear-gradient(180deg, #f8fafc, #eef2ff);
+        color: var(--ink);
+      }
+      .page {
+        max-width: 1380px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      .hero, .panel {
+        background: var(--card);
+        border-radius: 24px;
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+      }
+      .hero {
+        padding: 28px;
+        margin-bottom: 20px;
+      }
+      .hero h1 { margin: 0 0 10px; font-size: 32px; }
+      .hero p { margin: 0; color: var(--muted); line-height: 1.7; }
+      .grid {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 20px;
+      }
+      .panel { padding: 22px; }
+      .stack {
+        display: grid;
+        gap: 20px;
+      }
+      label {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      input, textarea {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        font: inherit;
+      }
+      textarea { min-height: 84px; resize: vertical; }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      button {
+        min-height: 44px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 14px;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+        color: white;
+        background: linear-gradient(135deg, var(--blue), var(--violet));
+      }
+      button.secondary {
+        color: var(--blue);
+        background: rgba(49, 87, 213, 0.1);
+      }
+      button:disabled {
+        cursor: not-allowed;
+        color: rgba(15, 23, 42, 0.4);
+        background: rgba(15, 23, 42, 0.08);
+      }
+      .message {
+        margin: 12px 0 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      .message[data-state="success"] { color: #166534; }
+      .message[data-state="error"] { color: #b91c1c; }
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .toolbar-meta {
+        display: flex;
+        gap: 14px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .summary-card {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px 16px;
+        background: #f8fafc;
+      }
+      .summary-card strong {
+        display: block;
+        font-size: 24px;
+        margin-top: 4px;
+      }
+      .summary-card span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+        border-radius: 18px;
+      }
+      th, td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        font-size: 14px;
+        vertical-align: top;
+      }
+      th { color: var(--muted); font-size: 13px; white-space: nowrap; }
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 800;
+        font-size: 13px;
+      }
+      .hash {
+        max-width: 220px;
+        word-break: break-all;
+      }
+      .empty { color: var(--muted); padding: 18px 0 4px; }
+      .status-badge {
+        display: inline-flex;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        background: rgba(15, 23, 42, 0.08);
+      }
+      .status-unused { color: #475569; }
+      .status-active { color: #1d4ed8; background: rgba(59, 130, 246, 0.12); }
+      .status-exhausted { color: #b91c1c; background: rgba(239, 68, 68, 0.12); }
+      .log-type {
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 12px;
+        color: #4338ca;
+      }
+      @media (max-width: 1100px) {
+        .grid { grid-template-columns: 1fr; }
+        .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 680px) {
+        .summary-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="hero">
+        <h1>卡密管理台</h1>
+        <p>用于生成、查看和重置卡密，并直接查看每张卡密的 AI 使用次数、下载次数、绑定图片标识，以及最近的操作日志。</p>
+      </section>
+
+      <div class="grid">
+        <section class="panel">
+          <label>
+            管理员密钥
+            <input id="adminKey" type="password" placeholder="默认：pixel-admin-2026" />
+          </label>
+          <label>
+            生成数量
+            <input id="cardCount" type="number" min="1" max="200" value="10" />
+          </label>
+          <label>
+            卡密前缀
+            <input id="cardPrefix" type="text" value="PB" />
+          </label>
+          <label>
+            备注
+            <textarea id="cardNote" placeholder="例如：2026年8月活动卡密"></textarea>
+          </label>
+          <div class="actions">
+            <button id="generateCards">生成卡密</button>
+            <button id="refreshCards" class="secondary">刷新列表</button>
+          </div>
+          <p id="adminMessage" class="message">请输入管理员密钥，然后生成或查看卡密。</p>
+        </section>
+
+        <section class="stack">
+          <section class="panel">
+            <div class="toolbar">
+              <strong>卡密列表</strong>
+              <div class="toolbar-meta">
+                <span id="cardSummary">共 0 张</span>
+                <span id="logSummary">日志 0 条</span>
+              </div>
+            </div>
+            <div class="summary-grid" id="summaryGrid">
+              <div class="summary-card"><span>未使用</span><strong id="summaryUnused">0</strong></div>
+              <div class="summary-card"><span>已激活</span><strong id="summaryActive">0</strong></div>
+              <div class="summary-card"><span>已失效</span><strong id="summaryExhausted">0</strong></div>
+              <div class="summary-card"><span>已绑定图片</span><strong id="summaryBound">0</strong></div>
+            </div>
+            <div style="overflow:auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>卡密</th>
+                    <th>状态</th>
+                    <th>AI 次数</th>
+                    <th>下载次数</th>
+                    <th>绑定图片</th>
+                    <th>备注</th>
+                    <th>创建时间</th>
+                    <th>使用时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="cardTableBody">
+                  <tr><td colspan="9" class="empty">暂无卡密，请先生成。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="toolbar">
+              <strong>最近操作日志</strong>
+              <div class="toolbar-meta">
+                <span>最多展示最近 200 条</span>
+              </div>
+            </div>
+            <div style="overflow:auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>类型</th>
+                    <th>卡密</th>
+                    <th>图片标识</th>
+                    <th>详情</th>
+                    <th>IP</th>
+                  </tr>
+                </thead>
+                <tbody id="logTableBody">
+                  <tr><td colspan="6" class="empty">暂无日志。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE = (() => {
+        const origin = window.location.origin;
+        if (origin && origin !== "null") return origin;
+        return "http://127.0.0.1:8789";
+      })();
+
+      const adminKeyInput = document.querySelector("#adminKey");
+      const cardCountInput = document.querySelector("#cardCount");
+      const cardPrefixInput = document.querySelector("#cardPrefix");
+      const cardNoteInput = document.querySelector("#cardNote");
+      const generateButton = document.querySelector("#generateCards");
+      const refreshButton = document.querySelector("#refreshCards");
+      const adminMessage = document.querySelector("#adminMessage");
+      const cardSummary = document.querySelector("#cardSummary");
+      const logSummary = document.querySelector("#logSummary");
+      const cardTableBody = document.querySelector("#cardTableBody");
+      const logTableBody = document.querySelector("#logTableBody");
+      const summaryUnused = document.querySelector("#summaryUnused");
+      const summaryActive = document.querySelector("#summaryActive");
+      const summaryExhausted = document.querySelector("#summaryExhausted");
+      const summaryBound = document.querySelector("#summaryBound");
+
+      // 读取当前输入的管理员密钥，所有后台接口都会依赖它鉴权。
+      function getAdminKey() {
+        return adminKeyInput.value.trim();
+      }
+
+      // 顶部消息提示：统一反馈生成、刷新、重置等操作结果。
+      function setMessage(message, type = "info") {
+        adminMessage.textContent = message;
+        adminMessage.dataset.state = type;
+      }
+
+      function truncateHash(value) {
+        if (!value) return "-";
+        return value.length > 18 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value;
+      }
+
+      function formatDate(value) {
+        return value ? new Date(value).toLocaleString("zh-CN") : "-";
+      }
+
+      // 后台请求封装：自动附带管理员密钥，并统一解析接口异常。
+      async function requestApi(url, options = {}) {
+        const adminKey = getAdminKey();
+        if (!adminKey) {
+          throw new Error("请输入管理员密钥。");
+        }
+
+        const response = await fetch(`${API_BASE}${url}`, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-key": adminKey,
+            ...(options.headers || {}),
+          },
+        });
+        const text = await response.text();
+        let result = {};
+        try {
+          result = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(text || "接口返回异常，请确认已通过 npm run dev 启动本地服务。");
+        }
+        if (!response.ok) {
+          throw new Error(result.message || result.error || "请求失败");
+        }
+        return result;
+      }
+
+      // 渲染统计卡片：快速查看卡密池当前整体状态。
+      function renderSummary(cards, logs) {
+        const unused = cards.filter((card) => card.status === "unused").length;
+        const active = cards.filter((card) => card.status === "active").length;
+        const exhausted = cards.filter((card) => card.status === "exhausted").length;
+        const bound = cards.filter((card) => card.imageHash).length;
+
+        cardSummary.textContent = `共 ${cards.length} 张`;
+        logSummary.textContent = `日志 ${logs.length} 条`;
+        summaryUnused.textContent = String(unused);
+        summaryActive.textContent = String(active);
+        summaryExhausted.textContent = String(exhausted);
+        summaryBound.textContent = String(bound);
+      }
+
+      // 渲染卡密主列表：展示次数、状态、绑定图片与可执行操作。
+      function renderCards(cards) {
+        if (!cards.length) {
+          cardTableBody.innerHTML = '<tr><td colspan="9" class="empty">暂无卡密，请先生成。</td></tr>';
+          return;
+        }
+
+        cardTableBody.innerHTML = cards
+          .slice()
+          .reverse()
+          .map((card) => `
+            <tr>
+              <td class="code">${card.code}</td>
+              <td><span class="status-badge status-${card.status}">${card.status === "active" ? "已激活" : card.status === "exhausted" ? "已失效" : "未使用"}</span></td>
+              <td>${Number(card.aiOptimizeCount) || 0} / 3</td>
+              <td>${Number(card.downloadCount) || 0} / 3</td>
+              <td class="code hash" title="${(card.boundImages || []).join("\n") || card.imageHash || ""}">${card.boundImages && card.boundImages.length ? `${card.boundImages.length} / 3 张` : card.imageHash ? truncateHash(card.imageHash) : "-"}</td>
+              <td>${card.note || "-"}</td>
+              <td>${formatDate(card.createdAt)}</td>
+              <td>${formatDate(card.usedAt || card.redeemedAt)}</td>
+              <td>
+                <button class="secondary" data-reset="${card.code}" ${card.status === "unused" ? "disabled" : ""}>重置</button>
+              </td>
+            </tr>
+          `)
+          .join("");
+
+        cardTableBody.querySelectorAll("[data-reset]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            try {
+              button.disabled = true;
+              await requestApi("/api/card-admin/reset", {
+                method: "POST",
+                body: JSON.stringify({ cardCode: button.dataset.reset }),
+              });
+              setMessage(`已重置卡密：${button.dataset.reset}`, "success");
+              await loadCards();
+            } catch (error) {
+              button.disabled = false;
+              setMessage(error.message || "重置失败", "error");
+            }
+          });
+        });
+      }
+
+      // 渲染最近操作日志：帮助定位下载、AI 优化和兑换问题。
+      function renderLogs(logs) {
+        if (!logs.length) {
+          logTableBody.innerHTML = '<tr><td colspan="6" class="empty">暂无日志。</td></tr>';
+          return;
+        }
+
+        logTableBody.innerHTML = logs
+          .map((log) => `
+            <tr>
+              <td>${formatDate(log.createdAt)}</td>
+              <td class="log-type">${log.type}</td>
+              <td class="code">${log.cardCode || "-"}</td>
+              <td class="code hash" title="${log.imageHash || ""}">${truncateHash(log.imageHash)}</td>
+              <td>${log.detail || "-"}</td>
+              <td class="code">${log.ip || "-"}</td>
+            </tr>
+          `)
+          .join("");
+      }
+
+      // 拉取后台数据：同时刷新统计卡片、卡密表和日志表。
+      async function loadCards() {
+        try {
+          setMessage("正在加载卡密与日志…");
+          const result = await requestApi("/api/card-admin/list");
+          const cards = result.cards || [];
+          const logs = result.logs || [];
+          renderSummary(cards, logs);
+          renderCards(cards);
+          renderLogs(logs);
+          setMessage("卡密与日志已更新。", "success");
+        } catch (error) {
+          setMessage(error.message || "加载失败", "error");
+        }
+      }
+
+      // 批量生成新卡密：支持数量、前缀和备注配置。
+      async function generateCards() {
+        try {
+          generateButton.disabled = true;
+          setMessage("正在生成卡密，请稍候…");
+          const result = await requestApi("/api/card-admin/generate", {
+            method: "POST",
+            body: JSON.stringify({
+              count: Number(cardCountInput.value) || 10,
+              prefix: cardPrefixInput.value.trim() || "PB",
+              note: cardNoteInput.value.trim(),
+            }),
+          });
+          setMessage(`成功生成 ${result.cards?.length || 0} 张卡密。`, "success");
+          await loadCards();
+        } catch (error) {
+          setMessage(error.message || "生成失败", "error");
+        } finally {
+          generateButton.disabled = false;
+        }
+      }
+
+      generateButton.addEventListener("click", generateCards);
+      refreshButton.addEventListener("click", loadCards);
+    </script>
+  </body>
+</html>

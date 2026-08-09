@@ -1,0 +1,20 @@
+name = "pixelbeans-api"
+main = "src/index.js"
+compatibility_date = "2026-08-08"
+compatibility_flags = ["nodejs_compat"]
+
+# 静态资源：卡密管理台（/卡密/index.html）
+assets = { directory = "./public" }
+
+# 生产密钥不要写在这里，用 `npx wrangler secret put <KEY>` 或控制台 Secrets 配置：
+# CARD_ADMIN_KEY / CARD_SESSION_SECRET / VOLC_ACCESS_KEY_ID / VOLC_SECRET_ACCESS_KEY
+
+[vars]
+# 可选：前端来源白名单（逗号分隔）。代理场景一般用不到，仅为兼容直连 CORS。
+ALLOWED_ORIGINS = ""
+CLIENT_ORIGIN = "https://pixelbeans.pages.dev"
+COOKIE_SECURE = "true"
+
+[[r2_buckets]]
+binding = "DATA"
+bucket_name = "pixelbeans-data"
