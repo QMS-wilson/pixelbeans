@@ -1152,7 +1152,7 @@ export default {
 };
 
 // 卡密数据 Durable Object：单实例串行处理，内存缓存 + 事务性持久化。
-export class CardStore {
+export class CardStoreV2 {
   constructor(state, env) {
     this.state = state;
     this.env = env;
