@@ -1,0 +1,261 @@
+{
+  "info": {
+    "name": "PixelBeans 卡密 API (Cloudflare Worker)",
+    "description": "卡密后端 Cloudflare Worker 版接口清单。\n\n使用前在集合变量里填写：\n- baseUrl：默认已填 https://pixelbeans-api.lxh187402.workers.dev\n- adminKey：管理端密钥（CARD_ADMIN_KEY）\n- accessToken：兑换成功后返回的 accessToken（可手动复制到变量）\n- cardCode：要兑换/重置的卡密\n- fileId：download-prepare 返回的 fileId（可手动复制到变量）\n\n管理端接口需要请求头 x-admin-key: {{adminKey}}。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 查询授权状态",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/access-status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "access-status"]
+        }
+      }
+    },
+    {
+      "name": "2. 兑换卡密",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cardCode\": \"{{cardCode}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/redeem-card",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "redeem-card"]
+        }
+      }
+    },
+    {
+      "name": "3. 带 Token 查询状态",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/access-status?accessToken={{accessToken}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "access-status"],
+          "query": [
+            {
+              "key": "accessToken",
+              "value": "{{accessToken}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "4. 退出登录",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/logout-access",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "logout-access"]
+        }
+      }
+    },
+    {
+      "name": "5. 管理-卡密列表",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-admin-key",
+            "value": "{{adminKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/card-admin/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card-admin", "list"]
+        }
+      }
+    },
+    {
+      "name": "6. 管理-生成卡密",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-admin-key",
+            "value": "{{adminKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"count\": 10,\n  \"prefix\": \"PB\",\n  \"note\": \"Postman 生成\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/card-admin/generate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card-admin", "generate"]
+        }
+      }
+    },
+    {
+      "name": "7. 管理-重置卡密",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-admin-key",
+            "value": "{{adminKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cardCode\": \"{{cardCode}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/card-admin/reset",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card-admin", "reset"]
+        }
+      }
+    },
+    {
+      "name": "8. 管理-导入数据",
+      "request": {
+        "description": "把 cards.json 的原始内容粘贴到 Body 里（顶层含 cards/logs/freeTrials），导入会覆盖当前数据。",
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-admin-key",
+            "value": "{{adminKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cards\": [\n    {\n      \"code\": \"PB-AAAA-BBBB-CCCC\",\n      \"status\": \"unused\",\n      \"note\": \"示例\",\n      \"createdAt\": \"2026-08-09T00:00:00.000Z\",\n      \"usedAt\": \"\",\n      \"redeemedAt\": \"\",\n      \"exhaustedAt\": \"\",\n      \"imageHash\": \"\",\n      \"boundImages\": [],\n      \"aiOptimizeCount\": 0,\n      \"downloadCount\": 0\n    }\n  ],\n  \"logs\": [],\n  \"freeTrials\": {}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/card-admin/import",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card-admin", "import"]
+        }
+      }
+    },
+    {
+      "name": "9. 下载-预处理",
+      "request": {
+        "description": "返回 fileId，复制到集合变量 fileId 后再调用「10. 下载-取文件」。图片下载时把 text 换成 dataUrl（data:image/png;base64,...）。",
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"accessToken\": \"{{accessToken}}\",\n  \"filename\": \"export\",\n  \"imageHash\": \"test-image-hash\",\n  \"text\": \"code,color\\nA1,#ff0000\\nB2,#00ff00\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/download-prepare",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "download-prepare"]
+        }
+      }
+    },
+    {
+      "name": "10. 下载-取文件",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/download-file?fileId={{fileId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "download-file"],
+          "query": [
+            {
+              "key": "fileId",
+              "value": "{{fileId}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "11. AI 优化",
+      "request": {
+        "description": "imageBase64 为图片 base64（可含 data: 前缀）。会调用火山引擎并轮询，耗时较长。",
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"imageBase64\": \"data:image/png;base64,...\",\n  \"prompt\": \"\",\n  \"imageHash\": \"test-image-hash\",\n  \"accessToken\": \"{{accessToken}}\",\n  \"freeTrial\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/ai-optimize",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "ai-optimize"]
+        }
+      }
+    },
+    {
+      "name": "12. 管理台页面",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/%E5%8D%A1%E5%AF%86/index.html",
+          "host": ["{{baseUrl}}"],
+          "path": ["%E5%8D%A1%E5%AF%86", "index.html"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://pixelbeans-api.lxh187402.workers.dev"
+    },
+    {
+      "key": "adminKey",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "cardCode",
+      "value": ""
+    },
+    {
+      "key": "fileId",
+      "value": ""
+    }
+  ]
+}
