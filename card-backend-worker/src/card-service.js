@@ -1,6 +1,6 @@
 // Cloudflare Worker 版卡密服务层。
 // 与 card-backend/card-service.js 保持同一套业务逻辑；
-// 存储改为 R2 对象（cards.json 保持原 JSON 格式，无数据库），
+// 存储改为 Durable Object 键值（cards.json 拆成 cards/logs/freeTrials 三个键，JSON 格式不变，无数据库），
 // 环境变量来自 Worker env（configure()）。
 
 import crypto from "node:crypto";
@@ -15,14 +15,15 @@ let COOKIE_SECURE = false;
 const BACKUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BACKUP_KEEP = 30;
 
-// ---- R2 存储（JSON 文件形式）----
-let env = null;
+// ---- Durable Object 存储（JSON 键值，无数据库）----
+// 存储适配器由 CardStore 注入：{ get, put, delete, list }
+let storage = null;
 let storeCache = null; // { store }
 let dirty = false;
 let lastBackupAt = 0;
 
-export function setWorkerEnv(workerEnv) {
-  env = workerEnv;
+export function setStorageAdapter(adapter) {
+  storage = adapter;
 }
 
 export function configure(workerEnv) {
@@ -31,17 +32,27 @@ export function configure(workerEnv) {
   COOKIE_SECURE = String(workerEnv.COOKIE_SECURE || "") === "true";
 }
 
-// 每个请求开始时调用：从 R2 读入内存缓存。
+// 每个请求开始时调用：从存储读入内存缓存。
 export async function loadStore() {
-  let parsed = { cards: [], logs: [], freeTrials: {} };
+  let cards = [];
+  let logs = [];
+  let freeTrials = {};
   try {
-    const obj = await env.DATA.get("cards.json");
-    if (obj) {
-      parsed = JSON.parse(await obj.text());
-    }
+    cards = JSON.parse((await storage.get("cards")) || "[]");
   } catch {
-    parsed = { cards: [], logs: [], freeTrials: {} };
+    cards = [];
   }
+  try {
+    logs = JSON.parse((await storage.get("logs")) || "[]");
+  } catch {
+    logs = [];
+  }
+  try {
+    freeTrials = JSON.parse((await storage.get("freeTrials")) || "{}");
+  } catch {
+    freeTrials = {};
+  }
+  let parsed = { cards, logs, freeTrials };
   const upgraded = upgradeCardStore(Array.isArray(parsed.cards) ? parsed : { cards: [] });
   if (upgraded.changed) parsed = upgraded.store;
   storeCache = { store: parsed };
@@ -53,33 +64,30 @@ export function readCardStore() {
   return storeCache.store;
 }
 
-// 同步标记脏数据；请求结束时由 flushStore() 落盘到 R2。
+// 同步标记脏数据；请求结束时由 flushStore() 落盘到存储。
 export function writeCardStore(store) {
   storeCache = { store };
   dirty = true;
 }
 
-// 请求结束时调用：把内存中的 store 写回 R2，并按 6 小时间隔备份（保留 30 份）。
+// 请求结束时调用：把内存中的 store 写回存储，并按 6 小时间隔备份（保留 30 份）。
 export async function flushStore() {
-  if (!env || !dirty) return;
+  if (!storage || !dirty) return;
   dirty = false;
   const store = storeCache.store;
-  const json = JSON.stringify(store, null, 2);
-  await env.DATA.put("cards.json", json, {
-    httpMetadata: { contentType: "application/json" },
-  });
+  await storage.put("cards", JSON.stringify(store.cards));
+  await storage.put("logs", JSON.stringify(store.logs));
+  await storage.put("freeTrials", JSON.stringify(store.freeTrials));
   const now = Date.now();
   if (now - lastBackupAt >= BACKUP_INTERVAL_MS) {
     lastBackupAt = now;
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    await env.DATA.put(`backup/cards-backup-${stamp}.json`, json, {
-      httpMetadata: { contentType: "application/json" },
-    });
     try {
-      const listed = await env.DATA.list({ prefix: "backup/cards-backup-" });
+      await storage.put(`backup/cards-backup-${stamp}.json`, JSON.stringify(store));
+      const listed = await storage.list({ prefix: "backup/cards-backup-" });
       const names = listed.objects.map((item) => item.key).sort();
       for (const key of names.slice(0, Math.max(0, names.length - BACKUP_KEEP))) {
-        await env.DATA.delete(key);
+        await storage.delete(key);
       }
     } catch {
       // 清理失败不影响主流程

@@ -6,6 +6,15 @@ compatibility_flags = ["nodejs_compat"]
 # 静态资源：卡密管理台（/卡密/index.html）
 assets = { directory = "./public" }
 
+# 数据存储：Durable Object（免费，无需开通 R2/付款）。
+# cards.json 拆成 cards / logs / freeTrials 三个键保存（JSON 格式不变）。
+[durable_objects]
+bindings = [{ name = "CARD_STORE", class_name = "CardStore" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CardStore"]
+
 # 生产密钥不要写在这里，用 `npx wrangler secret put <KEY>` 或控制台 Secrets 配置：
 # CARD_ADMIN_KEY / CARD_SESSION_SECRET / VOLC_ACCESS_KEY_ID / VOLC_SECRET_ACCESS_KEY
 
@@ -14,7 +23,3 @@ assets = { directory = "./public" }
 ALLOWED_ORIGINS = ""
 CLIENT_ORIGIN = "https://pixelbeans.pages.dev"
 COOKIE_SECURE = "true"
-
-[[r2_buckets]]
-binding = "DATA"
-bucket_name = "pixelbeans-data"

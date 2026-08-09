@@ -1,18 +1,19 @@
-// 拼豆卡密后端 - Cloudflare Worker 版
+// 拼豆卡密后端 - Cloudflare Worker + Durable Object 版
 // 与 card-backend/server.js 功能等价：
-// - 数据存储：R2 对象 cards.json（保持原 JSON 格式，无数据库）
-// - 两段式下载临时文件：R2 tmp/ 前缀对象（10 分钟过期）
+// - 数据存储：Durable Object 事务性键值（cards/logs/freeTrials，JSON 格式不变，无数据库、无需开通 R2）
+// - 两段式下载临时文件：DO 实例内存（10 分钟过期）
 // - AI 优化：直连火山引擎（签名逻辑一致）
 
 import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
 import {
-  setWorkerEnv,
+  setStorageAdapter,
   configure,
   loadStore,
   readCardStore,
   writeCardStore,
   flushStore,
+  upgradeCardStore,
   getAuthorizedCard,
   buildAccessPayload,
   appendCardLog,
@@ -405,40 +406,35 @@ function buildContentDisposition(filename) {
   return `attachment; filename="${safeFilename}"; filename*=UTF-8''${encoded}`;
 }
 
-// ---------- R2 两段式下载临时文件（10 分钟过期） ----------
+// ---------- 两段式下载临时文件（DO 实例内存，10 分钟过期） ----------
 
 const DOWNLOAD_TMP_TTL_MS = 10 * 60 * 1000;
+const downloadTmp = new Map();
 
-async function cleanStaleDownloadFiles() {
-  try {
-    const listed = await workerEnv.DATA.list({ prefix: "tmp/" });
-    const now = Date.now();
-    for (const item of listed.objects) {
-      const age = now - new Date(item.uploaded).getTime();
-      if (age > DOWNLOAD_TMP_TTL_MS) {
-        await workerEnv.DATA.delete(item.key);
-      }
+function cleanStaleDownloadFiles() {
+  const now = Date.now();
+  for (const [key, entry] of downloadTmp) {
+    if (now - entry.createdAt > DOWNLOAD_TMP_TTL_MS) {
+      downloadTmp.delete(key);
     }
-  } catch {
-    // 清理失败不影响主流程
   }
 }
 
-async function putDownloadTmp(fileId, ext, buffer) {
-  await cleanStaleDownloadFiles();
-  await workerEnv.DATA.put(`tmp/${fileId}${ext}`, buffer, {
-    httpMetadata: { contentType: ext === ".csv" ? "text/csv; charset=utf-8" : "image/png" },
-  });
+function putDownloadTmp(fileId, ext, buffer) {
+  cleanStaleDownloadFiles();
+  downloadTmp.set(`${fileId}${ext}`, { buffer, createdAt: Date.now() });
 }
 
-async function getDownloadTmp(fileId) {
-  const candidates = [`tmp/${fileId}`, `tmp/${fileId}.png`, `tmp/${fileId}.csv`];
+function getDownloadTmp(fileId) {
+  const candidates = [fileId, `${fileId}.png`, `${fileId}.csv`];
   for (const key of candidates) {
-    const obj = await workerEnv.DATA.get(key);
-    if (obj) {
-      const buffer = Buffer.from(await obj.arrayBuffer());
-      const ext = key.endsWith(".csv") ? ".csv" : key.endsWith(".png") ? ".png" : "";
-      return { buffer, ext };
+    const entry = downloadTmp.get(key);
+    if (entry) {
+      if (Date.now() - entry.createdAt <= DOWNLOAD_TMP_TTL_MS) {
+        const ext = key.endsWith(".csv") ? ".csv" : key.endsWith(".png") ? ".png" : "";
+        return { buffer: entry.buffer, ext };
+      }
+      downloadTmp.delete(key);
     }
   }
   return null;
@@ -654,7 +650,7 @@ async function handleDownloadPrepare(request, response) {
     writeCardStore(authorized.store);
 
     const fileId = crypto.randomUUID();
-    await putDownloadTmp(fileId, ext, buffer);
+    putDownloadTmp(fileId, ext, buffer);
     sendJson(response, 200, {
       success: true,
       fileId,
@@ -678,7 +674,7 @@ async function handleDownloadFile(request, response) {
     response.end(JSON.stringify({ error: "Invalid fileId" }));
     return;
   }
-  const found = await getDownloadTmp(fileId);
+  const found = getDownloadTmp(fileId);
   if (!found) {
     response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
     response.end(JSON.stringify({ error: "File not found or expired", message: "下载文件不存在或已过期，请重新导出。" }));
@@ -874,6 +870,32 @@ async function handleCardAdmin(request, response) {
       });
       writeCardStore(store);
       sendJson(response, 200, { success: true, card });
+      return;
+    }
+
+    if (request.method === "POST" && action === "import") {
+      const payload = await readJsonBody(request, MAX_JSON_BODY_BYTES);
+      if (!payload || !Array.isArray(payload.cards)) {
+        sendJson(response, 400, { error: "Invalid payload", message: "缺少 cards 数组。" });
+        return;
+      }
+      const upgraded = upgradeCardStore({
+        cards: payload.cards,
+        logs: Array.isArray(payload.logs) ? payload.logs : [],
+        freeTrials: payload.freeTrials || {},
+      });
+      writeCardStore(upgraded.store);
+      appendCardLog(upgraded.store, request, {
+        type: "import",
+        cardCode: "",
+        detail: `imported ${upgraded.store.cards.length} cards`,
+      });
+      writeCardStore(upgraded.store);
+      sendJson(response, 200, {
+        success: true,
+        cards: upgraded.store.cards.length,
+        logs: upgraded.store.logs.length,
+      });
       return;
     }
 
@@ -1120,11 +1142,35 @@ async function dispatch(request, response) {
   response.end(JSON.stringify({ error: "Not found", message: "接口不存在，请检查路径。" }));
 }
 
+// 入口 Worker：所有请求转发到唯一的 CardStore Durable Object（强一致、免费、无需 R2）。
 export default {
-  async fetch(request, env, ctx) {
-    workerEnv = env;
-    setWorkerEnv(env);
-    configure(env);
+  async fetch(request, env) {
+    const id = env.CARD_STORE.idFromName("global");
+    const stub = env.CARD_STORE.get(id);
+    return stub.fetch(request);
+  },
+};
+
+// 卡密数据 Durable Object：单实例串行处理，内存缓存 + 事务性持久化。
+export class CardStore {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    const adapter = {
+      get: (key) => this.state.storage.get(key),
+      put: (key, value) => this.state.storage.put(key, value),
+      delete: (key) => this.state.storage.delete(key),
+      list: async (options) => {
+        const result = await this.state.storage.list(options);
+        return { objects: (result.keys || []).map((item) => ({ key: item.name })) };
+      },
+    };
+    workerEnv = this.env;
+    setStorageAdapter(adapter);
+    configure(this.env);
     await loadStore();
 
     const nodeReq = await toNodeRequest(request);
@@ -1136,10 +1182,7 @@ export default {
       shim.end(JSON.stringify({ error: "Internal error", message: error instanceof Error ? error.message : "未知错误" }));
     }
 
-    const flushPromise = flushStore();
-    const response = shim.build();
-    ctx.waitUntil(flushPromise);
-    await flushPromise;
-    return response;
-  },
-};
+    await flushStore();
+    return shim.build();
+  }
+}
