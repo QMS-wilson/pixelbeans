@@ -7,3 +7,6 @@ card-backend/卡密/
 dist/
 pixelme_test_outputs/
 .DS_Store
+
+# WeChat mini-program now lives in its own repository (pixelbeans-wechat)
+pixelbeans-wechat/
